@@ -192,27 +192,27 @@ std::map<std::string, FormField> PostHandler::parseMultipartFormData(const std::
     std::map<std::string, FormField> fields;
     std::vector<std::string> parts = splitByBoundary(body, boundary);
     Logger::debug("Found " + Utils::intToString(parts.size()) + " parts");
-    
-for (size_t i = 0; i < parts.size(); ++i) {
-    if (parts[i].empty()) continue;
-    
-    Logger::debug("=== PROCESSING PART " + Utils::intToString(i) + " ===");
-    Logger::debug("Part " + Utils::intToString(i) + " preview: " + parts[i].substr(0, 300));
-    
-    FormField field = parseFormField(parts[i]);
-    if (!field.name.empty()) {
-        Logger::debug("=== FIELD FOUND ===");
-        Logger::debug("Name: '" + field.name + "'");
-        Logger::debug("Value: '" + field.value.substr(0, 50) + "'");
-        Logger::debug("Filename: '" + field.filename + "'");
-        Logger::debug("==================");
         
-        fields[field.name] = field;
-    } else {
-        Logger::debug("=== FIELD PARSING FAILED ===");
-        Logger::debug("Could not parse field from part " + Utils::intToString(i));
+    for (size_t i = 0; i < parts.size(); ++i) {
+        if (parts[i].empty()) continue;
+        
+        Logger::debug("=== PROCESSING PART " + Utils::intToString(i) + " ===");
+        Logger::debug("Part " + Utils::intToString(i) + " preview: " + parts[i].substr(0, 300));
+        
+        FormField field = parseFormField(parts[i]);
+        if (!field.name.empty()) {
+            Logger::debug("=== FIELD FOUND ===");
+            Logger::debug("Name: '" + field.name + "'");
+            Logger::debug("Value: '" + field.value.substr(0, 50) + "'");
+            Logger::debug("Filename: '" + field.filename + "'");
+            Logger::debug("==================");
+            
+            fields[field.name] = field;
+        } else {
+            Logger::debug("=== FIELD PARSING FAILED ===");
+            Logger::debug("Could not parse field from part " + Utils::intToString(i));
+        }
     }
-}
     return fields;
 }
 
@@ -330,51 +330,43 @@ std::string PostHandler::extractBoundary(const std::string& contentType) {
 std::vector<std::string> PostHandler::splitByBoundary(const std::string& body, const std::string& boundary) {
     std::vector<std::string> parts;
     std::string fullBoundary = "--" + boundary;
-    std::string endBoundary = fullBoundary + "--";
     
     Logger::debug("Splitting with boundary: " + fullBoundary);
     
+    // Trouver toutes les positions des boundaries
+    std::vector<size_t> boundaryPositions;
     size_t pos = 0;
-    size_t boundaryLen = fullBoundary.length();
-    
-    // Skip to first boundary
-    pos = body.find(fullBoundary, pos);
-    if (pos == std::string::npos) {
-        return parts;
+    while ((pos = body.find(fullBoundary, pos)) != std::string::npos) {
+        boundaryPositions.push_back(pos);
+        pos += fullBoundary.length();
     }
     
-    pos += boundaryLen;
+    Logger::debug("Found " + Utils::intToString(boundaryPositions.size()) + " boundaries");
     
-    while (pos < body.length()) {
-        // Skip CRLF after boundary
-        if (pos + 1 < body.length() && body[pos] == '\r' && body[pos + 1] == '\n') {
-            pos += 2;
+    // Extraire les parties entre les boundaries
+    for (size_t i = 0; i < boundaryPositions.size() - 1; ++i) {
+        size_t start = boundaryPositions[i] + fullBoundary.length();
+        size_t end = boundaryPositions[i + 1];
+        
+        // Ignorer les CRLF après le boundary
+        while (start < end && (body[start] == '\r' || body[start] == '\n')) {
+            start++;
         }
         
-        // Find next boundary
-        size_t nextBoundary = body.find("\r\n" + fullBoundary, pos);
-        if (nextBoundary == std::string::npos) {
-            break;
+        // Ignorer les CRLF avant le prochain boundary
+        while (end > start && (body[end - 1] == '\r' || body[end - 1] == '\n')) {
+            end--;
         }
         
-        // Extract part (from current pos to the CRLF before next boundary)
-        std::string part = body.substr(pos, nextBoundary - pos);
-        
-        if (!part.empty()) {
-            Logger::debug("Found part with length: " + Utils::intToString(part.length()));
-            parts.push_back(part);
-        }
-        
-        // Move to next boundary
-        pos = nextBoundary + 2 + boundaryLen;
-        
-        // Check if this is the end boundary
-        if (pos + 1 < body.length() && body[pos] == '-' && body[pos + 1] == '-') {
-            break;
+        if (start < end) {
+            std::string part = body.substr(start, end - start);
+            if (!part.empty()) {
+                Logger::debug("Part " + Utils::intToString(i) + " length: " + Utils::intToString(part.length()));
+                parts.push_back(part);
+            }
         }
     }
     
-    Logger::debug("Total parts extracted: " + Utils::intToString(parts.size()));
     return parts;
 }
 

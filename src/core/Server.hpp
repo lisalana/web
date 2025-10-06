@@ -37,7 +37,7 @@ private:
     
     // Event
     void handleEvents();
-    void handleNewConnection(int listen_fd);
+    static void handleNewConnection(int listen_fd, Server *server);
     static void handleClientRead(int client_fd, Server *server);
     static void handleClientWrite(int client_fd, Server *server);
     static void handleClientError(int client_fd, Server *server);

@@ -59,7 +59,7 @@ bool Server::setupListenSocket(const ServerConfig& serverConfig) {
         return false;
     }
     
-    if (!_epoll_manager.bindToFd(listen_fd, EVENT_READ, (EpollManager::callback_t)handleClientRead)) {
+    if (!_epoll_manager.bindToFd(listen_fd, EVENT_READ, (EpollManager::callback_t)handleNewConnection)) {
         close(listen_fd);
         return false;
     }
@@ -131,7 +131,7 @@ bool Server::start() {
         Logger::error("No listen sockets configured");
         return false;
     }
-    
+
     _running = true;
     Logger::info("Server started successfully");
     return true;
@@ -160,7 +160,6 @@ void Server::run() {
     Logger::info("Server running... Press Ctrl+C to stop");
     
     while (_running) {
-
 
         if (!_epoll_manager.watchForEvents(this)) {
             Logger::error("Epoll wait failed");
@@ -206,7 +205,7 @@ void Server::run() {
 //     }
 // }
 
-void Server::handleNewConnection(int listen_fd) {
+void Server::handleNewConnection(int listen_fd, Server *server) {
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
     
@@ -219,22 +218,17 @@ void Server::handleNewConnection(int listen_fd) {
     }
     
     Logger::info("New client connection: " + Utils::intToString(client_fd));
-    addClient(client_fd);
+    server->addClient(client_fd);
 }
 
 void Server::handleClientRead(int client_fd, Server *server) {
-    if (server->isListenSocket(client_fd)) {
-        Logger::warning("HERE");
-        server->handleNewConnection(client_fd);
-        return;
-    }
     std::map<int, Client>::iterator it = server->_clients.find(client_fd);
     if (it == server->_clients.end()) {
         return;
     }
     
     Client& client = it->second;
-    
+
     // BOUCLE tant qu'il y a des donnees disponibles
     while (true) {
         ssize_t bytes_read = client.readData();
@@ -254,6 +248,12 @@ void Server::handleClientRead(int client_fd, Server *server) {
             break;
         }
     }
+
+    if (client.getRequest().isComplete()) {
+        std::cout << client.getRequest().getBody() << std::endl;
+        server->_epoll_manager.unbindFd(client_fd, EVENT_READ);
+    }
+
 }
 
 void Server::handleClientWrite(int client_fd, Server *server) {
@@ -263,6 +263,14 @@ void Server::handleClientWrite(int client_fd, Server *server) {
     }
     
     Client& client = it->second;
+
+    if (client.isWriteComplete()) {
+        Logger::info("Client write complete on fd " + Utils::intToString(client_fd));
+        client.setState(DONE);
+        server->removeClient(client_fd);
+        return;
+    }
+
     ssize_t bytes_written = client.writeData();
     
     if (bytes_written < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
@@ -270,10 +278,6 @@ void Server::handleClientWrite(int client_fd, Server *server) {
         return;
     }
     
-    if (client.isWriteComplete()) {
-        client.setState(DONE);
-        server->removeClient(client_fd);
-    }
 }
 
 void Server::handleClientError(int client_fd,  Server *server) {
@@ -289,6 +293,11 @@ void Server::addClient(int fd) {
     }
     
     if (!_epoll_manager.bindToFd(fd, EVENT_READ, (EpollManager::callback_t)handleClientRead)) {
+        close(fd);
+        return;
+    }
+
+    if (!_epoll_manager.bindToFd(fd, EVENT_WRITE, (EpollManager::callback_t)handleClientWrite)) {
         close(fd);
         return;
     }
@@ -329,8 +338,7 @@ void Server::processRequest(Client& client) {
             
             std::string response = createHttpResponse(400, "<h1>400 Bad Request</h1>");
             client.setWriteBuffer(response);
-            client.setState(SENDING_RESPONSE);
-            _epoll_manager.bindToFd(client.getFd(), EVENT_WRITE, (EpollManager::callback_t)handleClientWrite);
+            // _epoll_manager.bindToFd(client.getFd(), EVENT_WRITE, (EpollManager::callback_t)handleClientWrite);
             return;
         }
         // Need more data - le parser attend plus de chunks
@@ -352,8 +360,6 @@ void Server::processRequest(Client& client) {
     
     // Generate appropriate response based on the request
     generateHttpResponse(client, request);
-    client.setState(SENDING_RESPONSE);
-    _epoll_manager.bindToFd(client.getFd(), EVENT_WRITE, (EpollManager::callback_t)handleClientWrite);
    // client.getRequest().clear();
 }
 
