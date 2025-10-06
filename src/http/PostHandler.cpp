@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <sstream>
 #include <algorithm>
+#include "String.hpp"
 
 
 HTTPResponse PostHandler::handlePost(const HTTPRequest& request, const ServerConfig& config) {
@@ -85,7 +86,7 @@ HTTPResponse PostHandler::handleFileUpload(const HTTPRequest& request, const Loc
             }
             
             // Determine le nom final du fichier
-            std::string finalFilename = field.filename; // nom original par defaut
+            String finalFilename = field.filename; // nom original par defaut
             
             if (!customName.empty()) {
                 // Extrai l'extension du fichier original
@@ -97,6 +98,8 @@ HTTPResponse PostHandler::handleFileUpload(const HTTPRequest& request, const Loc
                 finalFilename = customName + extension;
                 Logger::debug("Using custom filename: " + finalFilename);
             }
+
+            finalFilename = finalFilename.replace(" ", "_");
             
             // Check file type with final filename
             if (!isAllowedFileType(finalFilename)) {
@@ -292,6 +295,7 @@ bool PostHandler::isAllowedFileType(const std::string& filename) {
     allowed_extensions.push_back(".jpeg");
     allowed_extensions.push_back(".gif");
     allowed_extensions.push_back(".pdf");
+    allowed_extensions.push_back(".ico");
     
     std::string lower_filename = Utils::toLowerCase(filename);
     for (size_t i = 0; i < allowed_extensions.size(); ++i) {
@@ -326,43 +330,51 @@ std::string PostHandler::extractBoundary(const std::string& contentType) {
 std::vector<std::string> PostHandler::splitByBoundary(const std::string& body, const std::string& boundary) {
     std::vector<std::string> parts;
     std::string fullBoundary = "--" + boundary;
+    std::string endBoundary = fullBoundary + "--";
     
     Logger::debug("Splitting with boundary: " + fullBoundary);
     
-    // Trouver toutes les positions des boundaries
-    std::vector<size_t> boundaryPositions;
     size_t pos = 0;
-    while ((pos = body.find(fullBoundary, pos)) != std::string::npos) {
-        boundaryPositions.push_back(pos);
-        pos += fullBoundary.length();
+    size_t boundaryLen = fullBoundary.length();
+    
+    // Skip to first boundary
+    pos = body.find(fullBoundary, pos);
+    if (pos == std::string::npos) {
+        return parts;
     }
     
-    Logger::debug("Found " + Utils::intToString(boundaryPositions.size()) + " boundaries");
+    pos += boundaryLen;
     
-    // Extraire les parties entre les boundaries
-    for (size_t i = 0; i < boundaryPositions.size() - 1; ++i) {
-        size_t start = boundaryPositions[i] + fullBoundary.length();
-        size_t end = boundaryPositions[i + 1];
-        
-        // Ignorer les CRLF après le boundary
-        while (start < end && (body[start] == '\r' || body[start] == '\n')) {
-            start++;
+    while (pos < body.length()) {
+        // Skip CRLF after boundary
+        if (pos + 1 < body.length() && body[pos] == '\r' && body[pos + 1] == '\n') {
+            pos += 2;
         }
         
-        // Ignorer les CRLF avant le prochain boundary
-        while (end > start && (body[end - 1] == '\r' || body[end - 1] == '\n')) {
-            end--;
+        // Find next boundary
+        size_t nextBoundary = body.find("\r\n" + fullBoundary, pos);
+        if (nextBoundary == std::string::npos) {
+            break;
         }
         
-        if (start < end) {
-            std::string part = body.substr(start, end - start);
-            if (!part.empty()) {
-                Logger::debug("Part " + Utils::intToString(i) + " length: " + Utils::intToString(part.length()));
-                parts.push_back(part);
-            }
+        // Extract part (from current pos to the CRLF before next boundary)
+        std::string part = body.substr(pos, nextBoundary - pos);
+        
+        if (!part.empty()) {
+            Logger::debug("Found part with length: " + Utils::intToString(part.length()));
+            parts.push_back(part);
+        }
+        
+        // Move to next boundary
+        pos = nextBoundary + 2 + boundaryLen;
+        
+        // Check if this is the end boundary
+        if (pos + 1 < body.length() && body[pos] == '-' && body[pos + 1] == '-') {
+            break;
         }
     }
     
+    Logger::debug("Total parts extracted: " + Utils::intToString(parts.size()));
     return parts;
 }
 

@@ -3,6 +3,8 @@
 #include <ctime>
 #include <sstream>
 
+#define CRLF "\r\n"
+
 HTTPResponse::HTTPResponse() : _status_code(200) {
     setDefaultHeaders();
 }
@@ -75,13 +77,13 @@ std::string HTTPResponse::toString() const {
     std::string response;
     
     // Status line
-    response += "HTTP/1.1 " + Utils::intToString(_status_code) + " " + _status_message + "\r\n";
+    response += "HTTP/1.1 " + Utils::intToString(_status_code) + " " + _status_message + CRLF;
     
     // Headers
     response += headerToString();
     
     // Empty line before body
-    response += "\r\n";
+    response += CRLF;
     
     // Body
     response += _body;
@@ -126,9 +128,9 @@ std::string HTTPResponse::headerToString() const {
     for (std::map<std::string, std::string>::const_iterator it = _headers.begin();
          it != _headers.end(); ++it) {
         if (it->first == "set-cookie") {
-            headers += "Set-Cookie: " + it->second + "\r\n";
+            headers += "Set-Cookie: " + it->second + CRLF;
         } else {
-            headers += it->first + ": " + it->second + "\r\n";
+            headers += it->first + ": " + it->second + CRLF;
         }
     }
     return headers;

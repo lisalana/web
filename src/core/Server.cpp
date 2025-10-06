@@ -15,7 +15,7 @@
 #include "CGIHandler.hpp"
 
 
-Server::Server() : _config(0), _running(false) {
+Server::Server() : _epoll_manager(0), _config(0), _running(false) {
 }
 
 Server::~Server() {
@@ -30,7 +30,7 @@ bool Server::init(Config* config) {
     
     _config = config;
     
-    if (!_epoll.init()) {
+    if (_epoll_manager.failed) {
         Logger::error("Failed to initialize epoll");
         return false;
     }
@@ -59,7 +59,7 @@ bool Server::setupListenSocket(const ServerConfig& serverConfig) {
         return false;
     }
     
-    if (!_epoll.addFd(listen_fd, EVENT_READ)) {
+    if (!_epoll_manager.bindToFd(listen_fd, EVENT_READ, (EpollManager::callback_t)handleClientRead)) {
         close(listen_fd);
         return false;
     }
@@ -142,13 +142,13 @@ void Server::stop() {
     
     // Close all client connections
     for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
-        _epoll.removeFd(it->first);
+        _epoll_manager.unbindFd(it->first, -1);
     }
     _clients.clear();
     
     // Close listen sockets
     for (size_t i = 0; i < _listen_fds.size(); ++i) {
-        _epoll.removeFd(_listen_fds[i]);
+        _epoll_manager.unbindFd(_listen_fds[i], -1);
         close(_listen_fds[i]);
     }
     _listen_fds.clear();
@@ -160,17 +160,13 @@ void Server::run() {
     Logger::info("Server running... Press Ctrl+C to stop");
     
     while (_running) {
-        int event_count = _epoll.wait(1000); // 1 second timeout
-        
-        if (event_count == -1) {
+
+
+        if (!_epoll_manager.watchForEvents(this)) {
             Logger::error("Epoll wait failed");
             break;
         }
-        
-        if (event_count > 0) {
-            handleEvents();
-        }
-        
+
         // Clean up timed out clients
         std::vector<int> timed_out_clients;
         for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
@@ -186,29 +182,29 @@ void Server::run() {
     }
 }
 
-void Server::handleEvents() {
-    const std::vector<Event>& events = _epoll.getReadyEvents();
+// void Server::handleEvents() {
+//     const std::vector<Event>& events = _epoll_manager.getReadyEvents();
     
-    for (size_t i = 0; i < events.size(); ++i) {
-        const Event& event = events[i];
+//     for (size_t i = 0; i < events.size(); ++i) {
+//         const Event& event = events[i];
         
-        if (isListenSocket(event.fd)) {
-            handleNewConnection(event.fd);
-        } else {
-            switch (event.type) {
-                case EVENT_READ:
-                    handleClientRead(event.fd);
-                    break;
-                case EVENT_WRITE:
-                    handleClientWrite(event.fd);
-                    break;
-                case EVENT_ERROR:
-                    handleClientError(event.fd);
-                    break;
-            }
-        }
-    }
-}
+//         if (isListenSocket(event.fd)) {
+//             handleNewConnection(event.fd);
+//         } else {
+//             switch (event.type) {
+//                 case EVENT_READ:
+//                     handleClientRead(event.fd);
+//                     break;
+//                 case EVENT_WRITE:
+//                     handleClientWrite(event.fd);
+//                     break;
+//                 case EVENT_ERROR:
+//                     handleClientError(event.fd);
+//                     break;
+//             }
+//         }
+//     }
+// }
 
 void Server::handleNewConnection(int listen_fd) {
     struct sockaddr_in client_addr;
@@ -226,9 +222,14 @@ void Server::handleNewConnection(int listen_fd) {
     addClient(client_fd);
 }
 
-void Server::handleClientRead(int client_fd) {
-    std::map<int, Client>::iterator it = _clients.find(client_fd);
-    if (it == _clients.end()) {
+void Server::handleClientRead(int client_fd, Server *server) {
+    if (server->isListenSocket(client_fd)) {
+        Logger::warning("HERE");
+        server->handleNewConnection(client_fd);
+        return;
+    }
+    std::map<int, Client>::iterator it = server->_clients.find(client_fd);
+    if (it == server->_clients.end()) {
         return;
     }
     
@@ -240,13 +241,13 @@ void Server::handleClientRead(int client_fd) {
         
         if (bytes_read <= 0) {
             if (bytes_read == 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
-                removeClient(client_fd);
+                server->removeClient(client_fd);
             }
             break;  // Plus de donnees disponibles pour l'instant
         }
         
         // Traiter la requete apres chaque lecture
-        processRequest(client);
+        server->processRequest(client);
         
         // Si la requete est complete, pas besoin de lire plus
         if (client.getRequest().isComplete()) {
@@ -255,9 +256,9 @@ void Server::handleClientRead(int client_fd) {
     }
 }
 
-void Server::handleClientWrite(int client_fd) {
-    std::map<int, Client>::iterator it = _clients.find(client_fd);
-    if (it == _clients.end()) {
+void Server::handleClientWrite(int client_fd, Server *server) {
+    std::map<int, Client>::iterator it = server->_clients.find(client_fd);
+    if (it == server->_clients.end()) {
         return;
     }
     
@@ -265,20 +266,20 @@ void Server::handleClientWrite(int client_fd) {
     ssize_t bytes_written = client.writeData();
     
     if (bytes_written < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-        removeClient(client_fd);
+        server->removeClient(client_fd);
         return;
     }
     
     if (client.isWriteComplete()) {
         client.setState(DONE);
-        removeClient(client_fd);
+        server->removeClient(client_fd);
     }
 }
 
-void Server::handleClientError(int client_fd) {
+void Server::handleClientError(int client_fd,  Server *server) {
     Logger::debug("Client error on fd " + Utils::intToString(client_fd));
-    resetClientAfterError(client_fd);
-    removeClient(client_fd);
+    server->resetClientAfterError(client_fd);
+    server->removeClient(client_fd);
 }
 
 void Server::addClient(int fd) {
@@ -287,7 +288,12 @@ void Server::addClient(int fd) {
         return;
     }
     
-    if (!_epoll.addFd(fd, EVENT_READ)) {
+    if (!_epoll_manager.bindToFd(fd, EVENT_READ, (EpollManager::callback_t)handleClientRead)) {
+        close(fd);
+        return;
+    }
+
+    if (!_epoll_manager.bindToFd(fd, EVENT_ERROR, (EpollManager::callback_t)handleClientError)) {
         close(fd);
         return;
     }
@@ -300,7 +306,7 @@ void Server::removeClient(int client_fd) {
     std::map<int, Client>::iterator it = _clients.find(client_fd);
     if (it != _clients.end()) {
   //it->second.getRequest().clear();
-        _epoll.removeFd(client_fd);
+        _epoll_manager.unbindFd(client_fd, -1);
         it->second.closeFd();  // Ferme le fd
         _clients.erase(it);
         Logger::debug("Client " + Utils::intToString(client_fd) + " removed");
@@ -324,7 +330,7 @@ void Server::processRequest(Client& client) {
             std::string response = createHttpResponse(400, "<h1>400 Bad Request</h1>");
             client.setWriteBuffer(response);
             client.setState(SENDING_RESPONSE);
-            _epoll.modifyFd(client.getFd(), EVENT_WRITE);
+            _epoll_manager.bindToFd(client.getFd(), EVENT_WRITE, (EpollManager::callback_t)handleClientWrite);
             return;
         }
         // Need more data - le parser attend plus de chunks
@@ -347,7 +353,7 @@ void Server::processRequest(Client& client) {
     // Generate appropriate response based on the request
     generateHttpResponse(client, request);
     client.setState(SENDING_RESPONSE);
-    _epoll.modifyFd(client.getFd(), EVENT_WRITE);
+    _epoll_manager.bindToFd(client.getFd(), EVENT_WRITE, (EpollManager::callback_t)handleClientWrite);
    // client.getRequest().clear();
 }
 

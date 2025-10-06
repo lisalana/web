@@ -11,7 +11,7 @@
 class Server {
 private:
     std::vector<int> _listen_fds;
-    Epoll _epoll;
+    EpollManager _epoll_manager;
     std::map<int, Client> _clients;
     Config* _config;
     bool _running;
@@ -38,9 +38,9 @@ private:
     // Event
     void handleEvents();
     void handleNewConnection(int listen_fd);
-    void handleClientRead(int client_fd);
-    void handleClientWrite(int client_fd);
-    void handleClientError(int client_fd);
+    static void handleClientRead(int client_fd, Server *server);
+    static void handleClientWrite(int client_fd, Server *server);
+    static void handleClientError(int client_fd, Server *server);
     
     // Client management
     void addClient(int fd);

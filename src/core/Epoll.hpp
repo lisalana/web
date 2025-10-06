@@ -4,48 +4,58 @@
 #include <sys/epoll.h>
 #include <vector>
 #include <cstddef>
+#include <sys/epoll.h>
+#include <unistd.h>
+#include <map>
+#include "Logger.hpp"
 
 #define MAX_EVENTS 1024
 
 enum EventType {
     EVENT_READ = EPOLLIN,
     EVENT_WRITE = EPOLLOUT,
-    EVENT_ERROR = EPOLLERR | EPOLLHUP
+    EVENT_ERROR = EPOLLERR | EPOLLHUP,
+    __EVENT_COUNTS__
 };
 
-struct Event {
-    int fd;
-    EventType type;
-    void* data;
-    
-    Event() : fd(-1), type(EVENT_READ), data(0) {}
-    Event(int f, EventType t, void* d = 0) : fd(f), type(t), data(d) {
-        (void)d;
-    }
+typedef struct epoll_event epoll_t;
+typedef int fd_t;
+
+class EpollManager
+{
+
+	public:
+		typedef void (*callback_t)(int, void *);
+
+	private:
+
+		epoll_t *_events;
+
+		std::map<int, std::map<int, callback_t> > fds_callbacks;
+
+		fd_t _ep_fd;
+
+        
+    public:
+
+        bool failed;
+
+		EpollManager(int flags);
+
+		bool isTracked(int fd) const throw();
+
+		bool isTracked(int fd, int event) throw();
+
+		int getTrackedEvents(int fd) throw();
+
+		bool bindToFd(int fd, uint32_t event, callback_t callback);
+
+		bool unbindFd(int fd, int event) throw();
+
+		bool watchForEvents(void *ptr) throw();
+
+		~EpollManager();
 };
 
-class Epoll {
-private:
-    int _epoll_fd;
-    struct epoll_event _events[MAX_EVENTS];
-    std::vector<Event> _ready_events;
-
-public:
-    Epoll();
-    ~Epoll();
-
-    bool init();
-    bool addFd(int fd, EventType events, void* data = 0);
-    bool modifyFd(int fd, EventType events, void* data = 0);
-    bool removeFd(int fd);
-    
-    int wait(int timeout_ms = -1);
-    const std::vector<Event>& getReadyEvents() const;
-    
-    bool isValid() const;
-
-private:
-    uint32_t eventTypeToEpollEvents(EventType type);
-};
 
 #endif
