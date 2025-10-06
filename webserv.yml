@@ -1,0 +1,42 @@
+server:
+  listen: 8080
+  host: 127.0.0.1
+  server_name: localhost
+  client_max_body_size: 52428800
+  error_pages:
+    400: ./errors/400.html
+    404: ./errors/404.html
+    405: ./errors/405.html
+    500: ./errors/500.html
+  locations:
+    /:
+      root: ./static
+      index: index.html
+      methods:
+        - GET
+        - POST
+        - DELETE
+    /uploads:
+      root: ./
+      methods:
+        - GET
+        - DELETE
+      autoindex: true
+    /upload:
+      methods:
+        - POST
+      upload_path: ./uploads
+    /cgi-bin:
+      root: ./cgi-bin
+      methods:
+        - GET
+        - POST
+      cgi_extension: .php
+      cgi_path: /usr/bin/php-cgi
+    /cgi-bin/python:
+      root: ./cgi-bin
+      methods:
+        - GET
+        - POST
+      cgi_extension: .py
+      cgi_path: /usr/bin/python3

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CGI Tests - Webserv</title>
+    <link rel="stylesheet" href="/css/cgi-test.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 CGI Testing</h1>
+            <p>Test PHP and Python CGI execution</p>
+        </div>
+        
+        <div class="test-card">
+            <h2>🐘 PHP CGI Tests</h2>
+            <div class="links">
+                <a href="/cgi-bin/hello.php" class="test-link" target="_blank">Simple PHP</a>
+                <a href="/cgi-bin/test.php" class="test-link" target="_blank">PHP Environment</a>
+                <a href="/cgi-bin/test.php?name=John&age=25" class="test-link" target="_blank">PHP GET Params</a>
+            </div>
+            
+            <form action="/cgi-bin/test.php" method="POST" target="_blank">
+                <h3>Test POST to PHP</h3>
+                <input type="text" name="username" placeholder="Username" required>
+                <input type="email" name="email" placeholder="Email">
+                <button type="submit">Submit POST</button>
+            </form>
+        </div>
+        
+        <div class="test-card">
+            <h2>🐍 Python CGI Tests</h2>
+            <div class="links">
+                <a href="/cgi-bin/python/hello.py" class="test-link" target="_blank">Simple Python</a>
+                <a href="/cgi-bin/python/test.py" class="test-link" target="_blank">Python Environment</a>
+            </div>
+            
+            <form action="/cgi-bin/python/test.py" method="POST" target="_blank">
+                <h3>Test POST to Python</h3>
+                <input type="text" name="message" placeholder="Message" required>
+                <input type="number" name="value" placeholder="Value">
+                <button type="submit">Submit POST</button>
+            </form>
+        </div>
+        
+        <div class="test-card">
+            <h2>🔗 Other Features</h2>
+            <div class="links">
+                <a href="/" class="test-link">Home</a>
+                <a href="/upload.html" class="test-link">Upload</a>
+                <a href="/uploads" class="test-link">Uploads</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
