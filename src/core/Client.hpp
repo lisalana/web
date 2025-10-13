@@ -22,6 +22,7 @@ private:
     ClientState _state;
     std::string _read_buffer;
     std::string _write_buffer;
+    size_t  _bytes_sent;
     size_t _write_offset;
     time_t _last_activity;
     HTTPParser _parser;      // Parser pour ce client

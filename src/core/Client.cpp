@@ -62,6 +62,7 @@ void Client::closeFd() {
 
 Client::Client(const Client& other) {
     _fd = other._fd;
+    _bytes_sent = other._bytes_sent;
     _state = other._state;
     _read_buffer = other._read_buffer;
     _write_buffer = other._write_buffer;
@@ -82,6 +83,7 @@ Client& Client::operator=(const Client& other) {
         
         _fd = other._fd;
         _state = other._state;
+        _bytes_sent = other._bytes_sent;
         _read_buffer = other._read_buffer;
         _write_buffer = other._write_buffer;
         _write_offset = other._write_offset;
@@ -95,6 +97,7 @@ Client& Client::operator=(const Client& other) {
 void Client::init() {
     _state = READING_REQUEST;
     _write_offset = 0;
+    _bytes_sent = 0;
     _last_activity = time(NULL);
     _parser.reset();           // Reset le parser
     _request = HTTPRequest();  // Reset la requête
@@ -189,7 +192,7 @@ ssize_t Client::writeData() {
             Logger::debug("Write error to client " + Utils::intToString(_fd));
         }
     }
-    
+    _bytes_sent = bytes_sent;
     return bytes_sent;
 }
 
@@ -211,7 +214,7 @@ bool Client::isTimedOut() const {
 }
 
 bool Client::isWriteComplete() const {
-    return _write_offset >= _write_buffer.size();
+    return _write_offset >= _write_buffer.size() && _bytes_sent > 0;
 }
 
 bool Client::hasDataToWrite() const {

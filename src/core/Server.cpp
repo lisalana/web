@@ -425,6 +425,7 @@ void Server::generateHttpResponse(Client& client, const HTTPRequest& request) {
     
     // Normal file serving
     HTTPResponse response = FileServer::serveFile(request, *serverConfig);
+            Logger::warning(response.toString());
     client.setWriteBuffer(response.toString());
     
     Logger::info("Served: " + request.methodToString() + " " + request.getURI() + " -> " + 
