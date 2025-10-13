@@ -22,11 +22,12 @@ public:
     static void setLevel(LogLevel level);
     static void debug(const std::string& message);
     static void info(const std::string& message);
+    static void info(const std::string& message, int fd);
     static void warning(const std::string& message);
     static void error(const std::string& message);
     
 private:
-    static void log(LogLevel level, const std::string& message);
+    static void log(LogLevel level, const std::string& message, int fd = -1);
     static std::string getCurrentTime();
     static std::string levelToString(LogLevel level);
 };

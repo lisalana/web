@@ -1,16 +1,47 @@
 #include "Epoll.hpp"
 #include "Utils.hpp"
+#include <cerrno>
+#include <cstring>
+#include <sstream>
+
+namespace {
+
+std::string eventMaskToString(uint32_t events) {
+	std::string names;
+
+	if (events & EVENT_READ) {
+		names += "READ";
+	}
+	if (events & EVENT_WRITE) {
+		if (!names.empty())
+			names += "|";
+		names += "WRITE";
+	}
+	if (events & EVENT_ERROR) {
+		if (!names.empty())
+			names += "|";
+		names += "ERROR";
+	}
+	if (names.empty()) {
+		std::ostringstream oss;
+		oss << "0x" << std::hex << events;
+		names = oss.str();
+	}
+	return names;
+}
+
+}
 
 EpollManager::EpollManager(int flags) : failed(false)
 {
-	Logger::info("EVENT_READ " + Utils::intToString(EVENT_READ));
-	Logger::info("EVENT_WRITE " + Utils::intToString(EVENT_WRITE));
-	Logger::info("EVENT_ERROR " + Utils::intToString(EVENT_ERROR));
+	Logger::debug("Initializing epoll (flags=" + Utils::intToString(flags) + ", READ="
+		+ eventMaskToString(EVENT_READ) + ", WRITE=" + eventMaskToString(EVENT_WRITE)
+		+ ", ERROR=" + eventMaskToString(EVENT_ERROR) + ")");
 
 	_ep_fd = epoll_create1(flags);
 	if (_ep_fd == -1)
 	{
-		Logger::error("fail to epoll_create1()");
+		Logger::error("epoll_create1 failed: " + std::string(strerror(errno)));
 		failed = true;
 		return ;
 	}
@@ -18,7 +49,7 @@ EpollManager::EpollManager(int flags) : failed(false)
 	_events = new epoll_t[MAX_EVENTS]();
 	if (!_events)
 	{
-		Logger::error("fail to allocate epoll_t events");
+		Logger::error("Failed to allocate epoll events buffer");
 		failed = true;
 		return ;
 	}
@@ -61,7 +92,7 @@ bool EpollManager::bindToFd(int fd, uint32_t event, callback_t callback)
 	}
 	else if (isTracked(fd, event))
 	{
-		Logger::warning("fd " + Utils::intToString(fd) + " is already bound for event " + Utils::intToString(event));
+		Logger::debug("fd " + Utils::intToString(fd) + " already bound for event " + eventMaskToString(event));
 		return true;
 	}
 
@@ -74,7 +105,7 @@ bool EpollManager::bindToFd(int fd, uint32_t event, callback_t callback)
 	{
 		epoll_ctl(_ep_fd, EPOLL_CTL_ADD, fd, &tmp);
 	}
-	Logger::info("bind fd " + Utils::intToString(fd) + " for event " + Utils::intToString(event));
+	Logger::debug("Bound fd " + Utils::intToString(fd) + " for event " + eventMaskToString(event));
 	return true;
 }
 
@@ -84,12 +115,12 @@ bool EpollManager::unbindFd(int fd, int event) throw()
 	{
 		fds_callbacks[fd].clear();
 		epoll_ctl(_ep_fd, EPOLL_CTL_DEL, fd, NULL);
-		Logger::info("unbind all events for fd " + Utils::intToString(fd));
+		Logger::debug("Unbound all events for fd " + Utils::intToString(fd));
 		return true;
 	}
 	if (!isTracked(fd, event))
 	{
-		Logger::warning("fd is not bound for this event");
+		Logger::debug("fd " + Utils::intToString(fd) + " is not bound for event " + eventMaskToString(event));
 		return false;
 	}
 	else
@@ -101,7 +132,7 @@ bool EpollManager::unbindFd(int fd, int event) throw()
 
 		fds_callbacks[fd].erase(event);
 		epoll_ctl(_ep_fd, EPOLL_CTL_MOD, fd, &tmp);
-		Logger::info("unbind fd " + Utils::intToString(fd) + " for event " + Utils::intToString(event));
+		Logger::debug("Unbound fd " + Utils::intToString(fd) + " for event " + eventMaskToString(event));
 		return true;
 	}
 }
@@ -112,7 +143,7 @@ bool EpollManager::watchForEvents(void *ptr) throw()
 
 	if (ready == -1)
 	{
-		Logger::warning("epoll_wait() fails");
+		Logger::error("epoll_wait failed: " + std::string(strerror(errno)));
 		return false;
 	}
 

@@ -17,6 +17,11 @@ void Logger::info(const std::string& message) {
         log(INFO, message);
 }
 
+void Logger::info(const std::string& message, int fd) {
+    if (_level <= INFO)
+        log(INFO, message, fd);
+}
+
 void Logger::warning(const std::string& message) {
     if (_level <= WARNING)
         log(WARNING, message);
@@ -27,7 +32,7 @@ void Logger::error(const std::string& message) {
         log(ERROR, message);
 }
 
-void Logger::log(LogLevel level, const std::string& message) {
+void Logger::log(LogLevel level, const std::string& message, int fd) {
     Color levelColor = Colors::WHITE;
     
     switch (level) {
@@ -38,9 +43,14 @@ void Logger::log(LogLevel level, const std::string& message) {
     }
     
     std::cout << Colors::GRAY << "[" << getCurrentTime() << "] " 
-              << levelColor << "[" << levelToString(level) << "] " 
-              << Colors::WHITE << message 
-              << TextFormat::RESET << std::endl;
+              << levelColor << "[" << levelToString(level) << "] "
+              << Colors::WHITE;
+
+    if (fd >= 0) {
+        std::cout << Colors::MAGENTA << "[" << fd << "] " << Colors::WHITE;
+    }
+
+    std::cout << message << TextFormat::RESET << std::endl;
 }
 
 std::string Logger::getCurrentTime() {

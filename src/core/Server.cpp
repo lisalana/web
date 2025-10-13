@@ -217,7 +217,6 @@ void Server::handleNewConnection(int listen_fd, Server *server) {
         return;
     }
     
-    Logger::info("New client connection: " + Utils::intToString(client_fd));
     server->addClient(client_fd);
 }
 
@@ -250,7 +249,6 @@ void Server::handleClientRead(int client_fd, Server *server) {
     }
 
     if (client.getRequest().isComplete()) {
-        std::cout << client.getRequest().getBody() << std::endl;
         server->_epoll_manager.unbindFd(client_fd, EVENT_READ);
     }
 
@@ -265,7 +263,7 @@ void Server::handleClientWrite(int client_fd, Server *server) {
     Client& client = it->second;
 
     if (client.isWriteComplete()) {
-        Logger::info("Client write complete on fd " + Utils::intToString(client_fd));
+        Logger::debug("Client write complete on fd " + Utils::intToString(client_fd));
         client.setState(DONE);
         server->removeClient(client_fd);
         return;
@@ -287,28 +285,34 @@ void Server::handleClientError(int client_fd,  Server *server) {
 }
 
 void Server::addClient(int fd) {
+    
     if (!makeNonBlocking(fd)) {
         close(fd);
+        Logger::error("Failed to set non-blocking mode on fd " + Utils::intToString(fd));
         return;
     }
     
     if (!_epoll_manager.bindToFd(fd, EVENT_READ, (EpollManager::callback_t)handleClientRead)) {
         close(fd);
+        Logger::error("Failed to bind EVENT_READ to fd " + Utils::intToString(fd));
         return;
     }
 
     if (!_epoll_manager.bindToFd(fd, EVENT_WRITE, (EpollManager::callback_t)handleClientWrite)) {
         close(fd);
+        Logger::error("Failed to bind EVENT_WRITE to fd " + Utils::intToString(fd));
         return;
     }
 
     if (!_epoll_manager.bindToFd(fd, EVENT_ERROR, (EpollManager::callback_t)handleClientError)) {
         close(fd);
+        Logger::error("Failed to bind EVENT_ERROR to fd " + Utils::intToString(fd));
         return;
     }
     
     Client client(fd);
     _clients[fd] = client;
+    Logger::info("New client connection", fd);
 }
 
 void Server::removeClient(int client_fd) {
@@ -318,7 +322,7 @@ void Server::removeClient(int client_fd) {
         _epoll_manager.unbindFd(client_fd, -1);
         it->second.closeFd();  // Ferme le fd
         _clients.erase(it);
-        Logger::debug("Client " + Utils::intToString(client_fd) + " removed");
+        Logger::info("Client disconnected", client_fd);
     }
 }
 
@@ -361,7 +365,7 @@ void Server::processRequest(Client& client) {
     }
     
     // Request parsed successfully and complete
-    Logger::info("Parsed complete request: " + request.methodToString() + " " + request.getURI());
+    Logger::info("Parsed complete request: " + request.methodToString() + " " + request.getURI(), client.getFd());
     
     // Generate appropriate response based on the request
     generateHttpResponse(client, request);
@@ -383,7 +387,7 @@ void Server::generateHttpResponse(Client& client, const HTTPRequest& request) {
         HTTPResponse response = FileServer::serveFile(request, *serverConfig);
         client.setWriteBuffer(response.toString());
         Logger::info("Served: " + request.methodToString() + " " + request.getURI() + " -> " + 
-                    Utils::intToString(response.getStatusCode()));
+                    Utils::intToString(response.getStatusCode()), client.getFd());
         return;
     }
     
@@ -395,11 +399,11 @@ void Server::generateHttpResponse(Client& client, const HTTPRequest& request) {
         if (Utils::endsWith(uri, location->cgi_extension)) {
             Logger::debug("CGI request detected: " + uri);
             
-        // Build script path - remove location path from URI first
-        std::string relativePath = uri.substr(location->path.length());
-        std::string scriptPath = location->root + relativePath;
+            // Build script path - remove location path from URI first
+            std::string relativePath = uri.substr(location->path.length());
+            std::string scriptPath = location->root + relativePath;
 
-        Logger::debug("Script path: " + scriptPath);
+            Logger::debug("Script path: " + scriptPath);
             
             // Check if script exists
             if (!Utils::fileExists(scriptPath)) {
@@ -417,7 +421,7 @@ void Server::generateHttpResponse(Client& client, const HTTPRequest& request) {
             if (cgiHandler.execute(response)) {
                 client.setWriteBuffer(response.toString());
                 Logger::info("CGI executed: " + request.methodToString() + " " + request.getURI() + " -> " + 
-                            Utils::intToString(response.getStatusCode()));
+                            Utils::intToString(response.getStatusCode()), client.getFd());
             } else {
                 response.setStatusCode(500);
                 response.setBody("<h1>500 - CGI Execution Failed</h1>");
@@ -433,7 +437,7 @@ void Server::generateHttpResponse(Client& client, const HTTPRequest& request) {
     client.setWriteBuffer(response.toString());
     
     Logger::info("Served: " + request.methodToString() + " " + request.getURI() + " -> " + 
-                Utils::intToString(response.getStatusCode()));
+                Utils::intToString(response.getStatusCode()), client.getFd());
 }
 
 void Server::generateResponse(Client& client, const std::string& request) {
