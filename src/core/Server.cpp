@@ -323,14 +323,21 @@ void Server::removeClient(int client_fd) {
 }
 
 void Server::processRequest(Client& client) {
-    const std::string& buffer = client.getReadBuffer();
+    const std::string buffer = client.getReadBuffer();
+    
+    if (buffer.empty()) {
+        return;
+    }
     
     // Utiliser le parser et la requete du client
     HTTPParser& parser = client.getParser();
     HTTPRequest& request = client.getRequest();
     
     // Parse avec le parser persistant (le parser garde son etat)
-    if (!parser.parse(request, buffer)) {
+    bool parsed = parser.parse(request, buffer);
+    client.clearReadBuffer();
+
+    if (!parsed) {
         if (parser.hasError()) {
             // Send 400 Bad Request et reset le client
             Logger::warning("Parser error for client " + Utils::intToString(client.getFd()));
@@ -343,6 +350,7 @@ void Server::processRequest(Client& client) {
         }
         // Need more data - le parser attend plus de chunks
         Logger::debug("Parser needs more data, waiting... (client " + Utils::intToString(client.getFd()) + ")");
+        // client.clearReadBuffer();
         return;
     }
     
@@ -354,9 +362,6 @@ void Server::processRequest(Client& client) {
     
     // Request parsed successfully and complete
     Logger::info("Parsed complete request: " + request.methodToString() + " " + request.getURI());
-    
-    // Clear the read buffer now that we've parsed the complete request
-    client.clearReadBuffer();
     
     // Generate appropriate response based on the request
     generateHttpResponse(client, request);
@@ -482,4 +487,3 @@ void Server::resetClientAfterError(int client_fd) {
         Logger::debug("Client " + Utils::intToString(client_fd) + " reset after error");
     }
 }
-
