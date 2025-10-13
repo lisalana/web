@@ -82,8 +82,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    Logger::setLevel(DEBUG);
-    // Logger::setLevel(INFO);
+    // Logger::setLevel(DEBUG);
+    Logger::setLevel(INFO);
     
     server.run();
     
