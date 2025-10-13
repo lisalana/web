@@ -254,7 +254,14 @@ bool CGIHandler::executeCGI(std::string& output) {
             break;
         } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
             // Pas de données disponibles, attends un peu
-            usleep(100000);
+            fd_set read_fds;
+            FD_ZERO(&read_fds);
+            FD_SET(pipeOut[0], &read_fds);
+
+            struct timeval tv;
+            tv.tv_sec = 0;
+            tv.tv_usec = 100000; // 100ms
+            select(pipeOut[0] + 1, &read_fds, NULL, NULL, &tv);
         } else {
             // Erreur de lecture
             Logger::error("Read error from CGI");
