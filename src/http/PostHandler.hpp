@@ -21,6 +21,7 @@ struct FormField
 class PostHandler 
 {
 public:
+    static std::string handleStopRequest(const HTTPRequest& request);
     static HTTPResponse handlePost(const HTTPRequest& request, const ServerConfig& config);
     static HTTPResponse handleFileUpload(const HTTPRequest& request, const LocationConfig& location, const ServerConfig& serverConfig);
     static HTTPResponse handleFormData(const HTTPRequest& request, const LocationConfig& location);

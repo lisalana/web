@@ -84,6 +84,16 @@ h1 {
     font-weight: 600;
     transition: all 0.3s ease;
     box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.link-card svg {
+    width: 32px;
+    height: 32px;
 }
 
 .link-card:hover {
@@ -98,4 +108,26 @@ h1 {
     padding-top: 20px;
     border-top: 1px solid #e2e8f0;
     font-size: 0.9em;
+}
+
+.stop-server {
+    background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
+}
+
+.stop-server:hover {
+    background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%);
+    transform: translateY(-5px);
+    box-shadow: 0 6px 25px rgba(220, 38, 38, 0.6);
+}
+
+.stop-server svg {
+    width: 32px;
+    height: 32px;
 }

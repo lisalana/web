@@ -475,3 +475,36 @@ bool PostHandler::checkContentLength(const HTTPRequest& request, size_t maxSize)
     return request.getContentLength() <= maxSize;
 }
 
+
+std::string PostHandler::handleStopRequest(const HTTPRequest& request) {
+    (void)request;
+    
+    std::string response = "HTTP/1.1 200 OK\r\n";
+    response += "Content-Type: text/html\r\n";
+    response += "Connection: close\r\n";
+    
+    std::string body = "<!DOCTYPE html>\n"
+                      "<html>\n"
+                      "<head>\n"
+                      "    <title>Server Stopping</title>\n"
+                      "    <style>\n"
+                      "        body { font-family: Arial; text-align: center; padding: 50px; background: #f0f0f0; }\n"
+                      "        h1 { color: #dc2626; }\n"
+                      "    </style>\n"
+                      "</head>\n"
+                      "<body>\n"
+                      "    <h1>🛑 Server Shutting Down</h1>\n"
+                      "    <p>The server is stopping gracefully...</p>\n"
+                      "    <p>Goodbye! 👋</p>\n"
+                      "</body>\n"
+                      "</html>";
+    
+    std::ostringstream oss;
+    oss << body.length();
+    response += "Content-Length: " + oss.str() + "\r\n\r\n";
+    response += body;
+    
+    std::cout << "\n[INFO] Stop request received\n" << std::endl;
+    
+    return response;
+}

@@ -10,6 +10,7 @@ private:
     std::string _status_message;
     std::map<std::string, std::string> _headers;
     std::string _body;
+    bool _stopserver;
 
 public:
     HTTPResponse();
@@ -23,6 +24,9 @@ public:
     void addHeader(const std::string& name, const std::string& value);
     void setHeader(const std::string& name, const std::string& value);
     
+    void setShouldStopServer(bool stop);
+    bool shouldStopServer() const;
+
     // Getters
     int getStatusCode() const;
     const std::string& getStatusMessage() const;

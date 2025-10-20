@@ -15,7 +15,9 @@ private:
     std::map<int, Client> _clients;
     Config* _config;
     bool _running;
+    bool _shouldStop;
     
+    static Server* _signalInstance; 
     static const int LISTEN_BACKLOG = 128;
 
     void resetClientAfterError(int client_fd);
@@ -24,10 +26,15 @@ public:
     Server();
     ~Server();
 
+    static void setSignalInstance(Server* instance);
+    static void signalHandler(int signum);
+    void requestShutdown();
+    
     bool init(Config* config);
     bool start();
     void stop();
     void run();
+    bool shouldStop() const { return _shouldStop; }
     
 private:
     // Socket setup
@@ -36,7 +43,6 @@ private:
     bool makeNonBlocking(int fd);
     
     // Event
-    void handleEvents();
     static void handleNewConnection(int listen_fd, Server *server);
     static void handleClientRead(int client_fd, Server *server);
     static void handleClientWrite(int client_fd, Server *server);

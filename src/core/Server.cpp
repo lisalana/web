@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <cerrno>
+#include <csignal>
 #include <cstring>
 #include <algorithm>
 #include "HTTPParser.hpp"
@@ -15,11 +16,30 @@
 #include "CGIHandler.hpp"
 
 
-Server::Server() : _epoll_manager(0), _config(0), _running(false) {
+Server* Server::_signalInstance = NULL;
+
+Server::Server() : _epoll_manager(0), _config(0), _running(false), _shouldStop(false) {
 }
 
 Server::~Server() {
     stop();
+}
+
+void Server::setSignalInstance(Server* instance) {
+    _signalInstance = instance;
+}
+
+void Server::signalHandler(int signum) {
+    if (signum == SIGINT || signum == SIGTERM) {
+        Logger::info("Received shutdown signal");
+        if (_signalInstance) {
+            _signalInstance->requestShutdown();
+        }
+    }
+}
+
+void Server::requestShutdown() {
+    _running = false;
 }
 
 bool Server::init(Config* config) {
@@ -156,11 +176,39 @@ void Server::stop() {
     Logger::info("Server stopped");
 }
 
+// void Server::run() {
+//     Logger::info("Server running... Press Ctrl+C to stop");
+    
+//     while (_running && !_shouldStop) {
+
+//         if (!_epoll_manager.watchForEvents(this)) {
+//             Logger::error("Epoll wait failed");
+//             break;
+//         }
+
+//         // Clean up timed out clients
+//         std::vector<int> timed_out_clients;
+//         for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
+//             if (it->second.isTimedOut()) {
+//                 timed_out_clients.push_back(it->first);
+//             }
+//         }
+        
+//         for (size_t i = 0; i < timed_out_clients.size(); ++i) {
+//             Logger::debug("Client " + Utils::intToString(timed_out_clients[i]) + " timed out");
+//             removeClient(timed_out_clients[i]);
+//         }
+//     }
+//     if (_shouldStop) {
+//         Logger::info("Server stopped via /stop request");
+//     }
+//     Logger::info("Server shutdown complete");
+// }
+
 void Server::run() {
     Logger::info("Server running... Press Ctrl+C to stop");
     
-    while (_running) {
-
+    while (_running && !_shouldStop) {
         if (!_epoll_manager.watchForEvents(this)) {
             Logger::error("Epoll wait failed");
             break;
@@ -179,31 +227,13 @@ void Server::run() {
             removeClient(timed_out_clients[i]);
         }
     }
+    
+    if (_shouldStop) {
+        Logger::info("Server stopped via /stop request");
+    }
+    Logger::info("Server shutdown complete");
 }
 
-// void Server::handleEvents() {
-//     const std::vector<Event>& events = _epoll_manager.getReadyEvents();
-    
-//     for (size_t i = 0; i < events.size(); ++i) {
-//         const Event& event = events[i];
-        
-//         if (isListenSocket(event.fd)) {
-//             handleNewConnection(event.fd);
-//         } else {
-//             switch (event.type) {
-//                 case EVENT_READ:
-//                     handleClientRead(event.fd);
-//                     break;
-//                 case EVENT_WRITE:
-//                     handleClientWrite(event.fd);
-//                     break;
-//                 case EVENT_ERROR:
-//                     handleClientError(event.fd);
-//                     break;
-//             }
-//         }
-//     }
-// }
 
 void Server::handleNewConnection(int listen_fd, Server *server) {
     struct sockaddr_in client_addr;
@@ -228,7 +258,7 @@ void Server::handleClientRead(int client_fd, Server *server) {
     
     Client& client = it->second;
 
-    // BOUCLE tant qu'il y a des donnees disponibles
+    // tant qu'il y a des donnees disponibles
     while (true) {
         ssize_t bytes_read = client.readData();
         
@@ -241,6 +271,11 @@ void Server::handleClientRead(int client_fd, Server *server) {
         
         // Traiter la requete apres chaque lecture
         server->processRequest(client);
+
+        it = server->_clients.find(client_fd);
+        if (it == server->_clients.end()) {
+            return;
+        }
         
         // Si la requete est complete, pas besoin de lire plus
         if (client.getRequest().isComplete()) {
@@ -248,7 +283,8 @@ void Server::handleClientRead(int client_fd, Server *server) {
         }
     }
 
-    if (client.getRequest().isComplete()) {
+    it = server->_clients.find(client_fd);
+    if (it != server->_clients.end() && it->second.getRequest().isComplete()) {
         server->_epoll_manager.unbindFd(client_fd, EVENT_READ);
     }
 
@@ -345,10 +381,15 @@ void Server::processRequest(Client& client) {
         if (parser.hasError()) {
             // Send 400 Bad Request et reset le client
             Logger::warning("Parser error for client " + Utils::intToString(client.getFd()));
+            int client_fd = client.getFd();
             resetClientAfterError(client.getFd());
             
             std::string response = createHttpResponse(400, "<h1>400 Bad Request</h1>");
-            client.setWriteBuffer(response);
+
+            std::map<int, Client>::iterator it = _clients.find(client_fd);
+            if (it != _clients.end()) {
+                it->second.setWriteBuffer(response);
+            }
             // _epoll_manager.bindToFd(client.getFd(), EVENT_WRITE, (EpollManager::callback_t)handleClientWrite);
             return;
         }
@@ -383,11 +424,17 @@ void Server::generateHttpResponse(Client& client, const HTTPRequest& request) {
     // Find matching location
     const LocationConfig* location = serverConfig->findLocation(request.getURI());
     
-    if (!location) {
+    if (!location) 
+    {
         HTTPResponse response = FileServer::serveFile(request, *serverConfig);
         client.setWriteBuffer(response.toString());
         Logger::info("Served: " + request.methodToString() + " " + request.getURI() + " -> " + 
                     Utils::intToString(response.getStatusCode()), client.getFd());
+        if (response.shouldStopServer()) 
+        {
+            Logger::info("Stop server request received, shutting down...");
+            _shouldStop = true;
+        }
         return;
     }
     
@@ -438,6 +485,12 @@ void Server::generateHttpResponse(Client& client, const HTTPRequest& request) {
     
     Logger::info("Served: " + request.methodToString() + " " + request.getURI() + " -> " + 
                 Utils::intToString(response.getStatusCode()), client.getFd());
+
+    if (response.shouldStopServer()) 
+    {
+        Logger::info("Stop server request received, shutting down...");
+        _shouldStop = true;
+    }
 }
 
 void Server::generateResponse(Client& client, const std::string& request) {

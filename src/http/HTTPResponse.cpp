@@ -5,11 +5,11 @@
 
 #define CRLF "\r\n"
 
-HTTPResponse::HTTPResponse() : _status_code(200) {
+HTTPResponse::HTTPResponse() : _status_code(200), _stopserver(false){
     setDefaultHeaders();
 }
 
-HTTPResponse::HTTPResponse(int statusCode) : _status_code(statusCode) {
+HTTPResponse::HTTPResponse(int statusCode) : _status_code(statusCode), _stopserver(false) {
     _status_message = getStatusMessage(statusCode);
     setDefaultHeaders();
 }
@@ -221,4 +221,12 @@ std::string HTTPResponse::getContentTypeByExtension(const std::string& filename)
     }
     
     return "application/octet-stream";
+}
+
+void HTTPResponse::setShouldStopServer(bool stop) {
+    _stopserver = stop;
+}
+
+bool HTTPResponse::shouldStopServer() const {
+    return _stopserver;
 }

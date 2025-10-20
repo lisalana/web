@@ -24,22 +24,11 @@ Client::Client(int fd) : _fd(fd) {
 }
 
 Client::~Client() {
-    // _read_buffer.clear();
-    // _write_buffer.clear();
-    // _request.clear();
+    _read_buffer.clear();
+    _write_buffer.clear();
+    _request.clear();
 }
 
-// void Client::closeFd() {
-//     if (_fd != -1) {
-//         close(_fd);
-//         Logger::debug("Client with fd " + Utils::intToString(_fd) + " fd closed");
-//         _fd = -1;
-
-//         _read_buffer.clear();
-//         _write_buffer.clear();
-//         _request.clear();
-//     }
-// }
 
 void Client::closeFd() {
     if (_fd != -1) {
@@ -49,16 +38,6 @@ void Client::closeFd() {
     }
 }
 
-// Client::Client(const Client& other) 
-//     : _fd(other._fd),
-//       _state(other._state),
-//       _read_buffer(other._read_buffer),
-//       _write_buffer(other._write_buffer),
-//       _write_offset(other._write_offset),
-//       _last_activity(other._last_activity),
-//       _parser(other._parser),
-//       _request(other._request) {
-// }
 
 Client::Client(const Client& other) {
     _fd = other._fd;

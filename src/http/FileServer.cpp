@@ -12,6 +12,42 @@
 #include "PostHandler.hpp"
 
 HTTPResponse FileServer::serveFile(const HTTPRequest& request, const ServerConfig& config) {
+    
+    // Check for stop server request
+    if (request.getURI() == "/stop") {
+        Logger::info("Stop server request received");
+        
+        HTTPResponse response(200);
+        std::string stopHTML = 
+            "<!DOCTYPE html>\n"
+            "<html>\n"
+            "<head>\n"
+            "    <meta charset='UTF-8'>\n"
+            "    <title>Server Stopping</title>\n"
+            "    <style>\n"
+            "        body { font-family: -apple-system, sans-serif; text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }\n"
+            "        .container { max-width: 500px; margin: 0 auto; background: white; border-radius: 20px; padding: 40px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }\n"
+            "        h1 { color: #dc2626; margin-bottom: 20px; }\n"
+            "        p { color: #4a5568; line-height: 1.6; }\n"
+            "    </style>\n"
+            "</head>\n"
+            "<body>\n"
+            "    <div class='container'>\n"
+            "        <h1>🛑 Server Shutting Down</h1>\n"
+            "        <p>The server is stopping gracefully...</p>\n"
+            "        <p>Goodbye! 👋</p>\n"
+            "    </div>\n"
+            "</body>\n"
+            "</html>";
+        
+        response.setBody(stopHTML);
+        response.setContentType("text/html");
+        response.addHeader("Connection", "close");
+        response.setShouldStopServer(true);
+        
+        return response;
+    }
+    
     // Find matching location
     const LocationConfig* location = config.findLocation(request.getURI());
     if (!location) {
