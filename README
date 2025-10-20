@@ -1,13 +1,13 @@
 # Webserv - Serveur HTTP en C++98
 
 ## 📋 Table des matières
-1. [Vue d'ensemble](#vue-densemble)
-2. [Bases d'un serveur HTTP](#bases-dun-serveur-http)
-3. [I/O Multiplexing avec Epoll](#io-multiplexing-avec-epoll)
-4. [Architecture du serveur](#architecture-du-serveur)
-5. [Gestion des erreurs](#gestion-des-erreurs)
-6. [Configuration](#configuration)
-7. [Fonctionnalités](#fonctionnalités)
+1. [Vue d'ensemble]
+2. [Bases d'un serveur HTTP]
+3. [I/O Multiplexing avec Epoll]
+4. [Architecture du serveur]
+5. [Gestion des erreurs]
+6. [Configuration]
+7. [Fonctionnalités]
 ---
 
 ## Vue d'ensemble
