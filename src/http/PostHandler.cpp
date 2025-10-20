@@ -129,36 +129,6 @@ HTTPResponse PostHandler::handleFileUpload(const HTTPRequest& request, const Loc
 }
 
 
-// void PostHandler::debugMultipartBody(const std::string& body, const std::string& boundary) {
-//     Logger::debug("=== RAW BODY DEBUG ===");
-//     std::string fullBoundary = "--" + boundary;
-    
-//     // Afficher les premiers 1000 caractères du body
-//     std::string preview = body.substr(0, 1000);
-//     Logger::debug("Body preview (1000 chars):");
-//     Logger::debug(preview);
-    
-//     // Chercher toutes les occurrences du boundary
-//     size_t pos = 0;
-//     int count = 0;
-//     while ((pos = body.find(fullBoundary, pos)) != std::string::npos) {
-//         Logger::debug("Boundary found at position: " + Utils::intToString(pos));
-        
-//         // Afficher 200 caractères après chaque boundary
-//         size_t start = pos + fullBoundary.length();
-//         if (start < body.length()) {
-//             size_t len = std::min((size_t)200, body.length() - start);
-//             std::string after = body.substr(start, len);
-//             Logger::debug("After boundary " + Utils::intToString(count) + ": " + after);
-//         }
-        
-//         pos += fullBoundary.length();
-//         count++;
-//     }
-//     Logger::debug("=== END RAW DEBUG ===");
-// }
-
-
 HTTPResponse PostHandler::handleFormData(const HTTPRequest& request, const LocationConfig& location) {
     (void)location;
     std::map<std::string, std::string> formData = parseUrlEncodedData(request.getBody());

@@ -79,8 +79,8 @@ void Client::init() {
     _bytes_sent = 0;
     _last_activity = time(NULL);
     _parser.reset();           // Reset le parser
-    _request = HTTPRequest();  // Reset la requête
-    //_request.clear();
+    _request = HTTPRequest();  // Reset la requete
+    _request.clear();
 }
 
 int Client::getFd() const {
@@ -143,7 +143,6 @@ ssize_t Client::readData() {
     } else if (bytes_read == 0) {
         Logger::debug("Client " + Utils::intToString(_fd) + " closed connection");
     } else {
-        // bytes_read < 0, check errno
         if (errno != EAGAIN && errno != EWOULDBLOCK) {
             Logger::debug("Read error from client " + Utils::intToString(_fd));
         }

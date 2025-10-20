@@ -284,16 +284,16 @@ bool HTTPParser::parseChunkedBody() {
     std::string& body = _request->getBodyRef();
     
     while (true) {
-        // Chercher la fin de la ligne de taille du chunk
+        // Cherche fin de la ligne de taille du chunk
         size_t crlf_pos = _buffer.find("\r\n");
         if (crlf_pos == std::string::npos) {
-            return false; // Besoin de plus de données
+            return false; // Besoin de plus de donnee
         }
         
-        // Parser la taille du chunk (en hexadécimal)
+        // Parse taille du chunk en hexa
         std::string size_line = _buffer.substr(0, crlf_pos);
         
-        // Ignorer les extensions de chunk (après ';')
+        // Ignorer les extensions chunk (après ;)
         size_t semicolon = size_line.find(';');
         if (semicolon != std::string::npos) {
             size_line = size_line.substr(0, semicolon);
@@ -302,10 +302,10 @@ bool HTTPParser::parseChunkedBody() {
         // Trim whitespace
         size_line = Utils::trim(size_line);
         
-        // Convertir hexa -> decimal
+        // Convert hexa -> decimal
         size_t chunk_size;
         char* endptr;
-        chunk_size = strtoul(size_line.c_str(), &endptr, 16);  // PAS de std::
+        chunk_size = strtoul(size_line.c_str(), &endptr, 16);
 
         if (*endptr != '\0') {
             Logger::error("Invalid chunk size: '" + size_line + "'");
@@ -314,9 +314,9 @@ bool HTTPParser::parseChunkedBody() {
         
         Logger::debug("Chunk size: " + Utils::intToString(chunk_size) + " (0x" + size_line + ")");
         
-        // Chunk de taille 0 = fin
+        // Chunk taille 0 = fin
         if (chunk_size == 0) {
-            // Consommer "0\r\n\r\n" (dernier chunk + ligne vide finale)
+         
             size_t trailer_end = _buffer.find("\r\n\r\n", crlf_pos);
             if (trailer_end == std::string::npos) {
                 return false; // Besoin de la ligne vide finale
@@ -327,16 +327,15 @@ bool HTTPParser::parseChunkedBody() {
             return true;
         }
         
-        // Vérifier qu'on a assez de données pour ce chunk
-        // Format: "SIZE\r\nDATA\r\n"
+        // verif assez de donnee pour ce chunck
         size_t needed = crlf_pos + 2 + chunk_size + 2;
         if (_buffer.length() < needed) {
             Logger::debug("Not enough data for chunk. Need: " + Utils::intToString(needed) + 
                          ", have: " + Utils::intToString(_buffer.length()));
-            return false; // Besoin de plus de données
+            return false; // Besoin de plus de donnee
         }
         
-        // Extraire les données du chunk
+        // Extraire les donnee du chunk
         std::string chunk_data = _buffer.substr(crlf_pos + 2, chunk_size);
         body += chunk_data;
         

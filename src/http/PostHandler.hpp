@@ -50,8 +50,6 @@ private:
     static bool isValidUploadRequest(const HTTPRequest& request, const LocationConfig& location);
     static bool checkContentLength(const HTTPRequest& request, size_t maxSize);
 
-    //static void debugMultipartBody(const std::string& body, const std::string& boundary);
-
 };
 
 #endif

@@ -176,35 +176,6 @@ void Server::stop() {
     Logger::info("Server stopped");
 }
 
-// void Server::run() {
-//     Logger::info("Server running... Press Ctrl+C to stop");
-    
-//     while (_running && !_shouldStop) {
-
-//         if (!_epoll_manager.watchForEvents(this)) {
-//             Logger::error("Epoll wait failed");
-//             break;
-//         }
-
-//         // Clean up timed out clients
-//         std::vector<int> timed_out_clients;
-//         for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
-//             if (it->second.isTimedOut()) {
-//                 timed_out_clients.push_back(it->first);
-//             }
-//         }
-        
-//         for (size_t i = 0; i < timed_out_clients.size(); ++i) {
-//             Logger::debug("Client " + Utils::intToString(timed_out_clients[i]) + " timed out");
-//             removeClient(timed_out_clients[i]);
-//         }
-//     }
-//     if (_shouldStop) {
-//         Logger::info("Server stopped via /stop request");
-//     }
-//     Logger::info("Server shutdown complete");
-// }
-
 void Server::run() {
     Logger::info("Server running... Press Ctrl+C to stop");
     

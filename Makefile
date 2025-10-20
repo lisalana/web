@@ -54,7 +54,7 @@ fclean: clean
 
 re: fclean all
 
-# Dev helpers
+# Dev
 test: $(NAME)
 	@echo "$(GREEN)Starting test server on port 8080...$(NC)"
 	@./$(NAME) webserv.conf
@@ -67,7 +67,6 @@ debug: $(NAME)
 valgrind: $(NAME)
 	valgrind --leak-check=full --show-leak-kinds=all ./$(NAME) webserv.conf
 
-# Check if all source files exist
 check:
 	@echo "$(YELLOW)Checking source files...$(NC)"
 	@for file in $(SOURCES); do \

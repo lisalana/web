@@ -154,79 +154,8 @@ bool CGIHandler::executeCGI(std::string& output) {
     }
     close(pipeIn[1]);
 
-//     // Rends le pipe non-bloquant
-//     fcntl(pipeOut[0], F_SETFL, O_NONBLOCK);
+    // Read CGI & rend pipe non blocant
 
-//     // Read CGI output avec select et timeout
-//     char buffer[8192];
-//     time_t start = time(NULL);
-//     int timeout_seconds = 5;
-//     bool timeout_occurred = false;
-
-//     while (true) {
-//         // Verif si le timeout global est depasse
-//         if (difftime(time(NULL), start) > timeout_seconds) {
-//             Logger::warning("CGI timeout, killing process");
-//             kill(pid, SIGKILL);
-//             timeout_occurred = true;
-//             break;
-//         }
-
-//         // Config select avec timeout court
-//         fd_set read_fds;
-//         FD_ZERO(&read_fds);
-//         FD_SET(pipeOut[0], &read_fds);
-
-//         struct timeval tv;
-//         tv.tv_sec = 0;
-//         tv.tv_usec = 100000; // 100ms
-
-//         int ret = select(pipeOut[0] + 1, &read_fds, NULL, NULL, &tv);
-
-//         if (ret > 0) {
-//             // Donnees disponibles
-//             ssize_t bytesRead = read(pipeOut[0], buffer, sizeof(buffer));
-//             if (bytesRead > 0) {
-//                 output.append(buffer, bytesRead);
-//                 Logger::debug("Read " + Utils::intToString(bytesRead) + " bytes from CGI");
-//             } else if (bytesRead == 0) {
-//                 // EOF - processus termine
-//                 break;
-//             }
-//         } else if (ret == 0) {
-//             // Timeout de select - continue la boucle
-//             continue;
-//         } else {
-//             // Erreur
-//             Logger::error("select() error on CGI pipe");
-//             break;
-//         }
-//     }
-
-//     close(pipeOut[0]);
-
-//     if (timeout_occurred) {
-//         waitpid(pid, NULL, 0);
-//         return false;
-//     }
-
-//     // Wait for child
-//     int status;
-//     waitpid(pid, &status, 0);
-
-//     Logger::debug("Total CGI output: " + Utils::intToString(output.length()) + " bytes");
-//     Logger::debug("Child exit status: " + Utils::intToString(WEXITSTATUS(status)));
-
-//     if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-//         Logger::debug("CGI executed successfully, output: " + Utils::intToString(output.length()) + " bytes");
-//         return true;
-//     }
-
-//     Logger::error("CGI exited with error");
-//     return false;
-// }
-//     // Read CGI output
-//     // Rends le pipe non-bloquant
     fcntl(pipeOut[0], F_SETFL, O_NONBLOCK);
 
     // Read CGI output avec timeout
@@ -236,7 +165,7 @@ bool CGIHandler::executeCGI(std::string& output) {
     bool timeout_occurred = false;
 
     while (true) {
-        // Vérifie le timeout
+        // Verif le timeout
         if (difftime(time(NULL), start) > timeout_seconds) {
             Logger::warning("CGI timeout, killing process");
             kill(pid, SIGKILL);
@@ -250,10 +179,10 @@ bool CGIHandler::executeCGI(std::string& output) {
             output.append(buffer, bytesRead);
             Logger::debug("Read " + Utils::intToString(bytesRead) + " bytes from CGI");
         } else if (bytesRead == 0) {
-            // EOF - processus terminé
+            // EOF - process termine
             break;
         } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            // Pas de données disponibles, attends un peu
+            // Pas de donnee dispo, attends un peu
             fd_set read_fds;
             FD_ZERO(&read_fds);
             FD_SET(pipeOut[0], &read_fds);
@@ -263,7 +192,6 @@ bool CGIHandler::executeCGI(std::string& output) {
             tv.tv_usec = 100000; // 100ms
             select(pipeOut[0] + 1, &read_fds, NULL, NULL, &tv);
         } else {
-            // Erreur de lecture
             Logger::error("Read error from CGI");
             break;
         }
