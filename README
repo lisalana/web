@@ -1,0 +1,440 @@
+# Webserv - Serveur HTTP en C++98
+
+## 📋 Table des matières
+1. [Vue d'ensemble](#vue-densemble)
+2. [Bases d'un serveur HTTP](#bases-dun-serveur-http)
+3. [I/O Multiplexing avec Epoll](#io-multiplexing-avec-epoll)
+4. [Architecture du serveur](#architecture-du-serveur)
+5. [Gestion des erreurs](#gestion-des-erreurs)
+6. [Configuration](#configuration)
+7. [Fonctionnalités](#fonctionnalités)
+---
+
+## Vue d'ensemble
+
+Webserv est un serveur HTTP/1.1 écrit en C++98, capable de gérer plusieurs connexions simultanées de manière non-bloquante grâce à l'I/O Multiplexing avec `epoll`.
+
+### Compilation
+```bash
+make
+./webserv webserv.conf
+```
+
+---
+
+##  Bases d'un serveur HTTP
+
+### Qu'est-ce qu'un serveur HTTP ?
+
+Un serveur HTTP est un programme qui :
+1. **Écoute** sur un port (ex: 8080)
+2. **Accepte** des connexions de clients (navigateurs, curl, etc.)
+3. **Reçoit** des requêtes HTTP (GET, POST, DELETE, etc.)
+4. **Traite** ces requêtes (cherche un fichier, exécute un CGI, etc.)
+5. **Envoie** une réponse HTTP avec un code de statut et du contenu
+
+### Le cycle Requête/Réponse
+```
+Client                          Serveur
+  |                                |
+  |--- GET /index.html HTTP/1.1 -->|  (1) Requête
+  |                                |
+  |                                |  (2) Traitement
+  |                                |      - Parse la requête
+  |                                |      - Trouve le fichier
+  |                                |      - Lit le contenu
+  |                                |
+  |<-- HTTP/1.1 200 OK ------------|  (3) Réponse
+  |    Content-Type: text/html     |
+  |    Content-Length: 1234        |
+  |                                |
+  |    <html>...</html>            |
+  |                                |
+```
+
+### Méthodes HTTP principales
+
+- **GET** : Récupère une ressource (fichier, page web)
+- **POST** : Envoie des données au serveur (upload, formulaire)
+- **DELETE** : Supprime une ressource
+
+### Codes de statut HTTP
+
+- **200 OK** : Succès
+- **201 Created** : Ressource créée
+- **301 Moved Permanently** : Redirection permanente
+- **400 Bad Request** : Requête malformée
+- **403 Forbidden** : Accès interdit
+- **404 Not Found** : Ressource introuvable
+- **405 Method Not Allowed** : Méthode non autorisée
+- **500 Internal Server Error** : Erreur serveur
+
+---
+
+## ⚡ I/O Multiplexing avec Epoll
+
+### Pourquoi l'I/O Multiplexing ?
+
+Sans multiplexing, un serveur devrait créer un thread par client → impossible avec des milliers de connexions.
+
+Avec `epoll`, **un seul thread** peut gérer des milliers de connexions simultanées en surveillant tous les sockets en même temps.
+
+### Fonction utilisée : `epoll` (Linux)
+
+Notre serveur utilise `epoll` avec les fonctions :
+- `epoll_create1()` : Crée une instance epoll
+- `epoll_ctl()` : Enregistre/modifie/supprime des file descriptors
+- `epoll_wait()` : Attend qu'un événement soit prêt
+
+### Comment fonctionne epoll ?
+```cpp
+// 1. Créer l'instance epoll
+int epoll_fd = epoll_create1(0);
+
+// 2. Enregistrer un socket pour surveiller les événements
+struct epoll_event event;
+event.events = EPOLLIN | EPOLLOUT;  // Surveiller lecture ET écriture
+event.data.fd = client_fd;
+epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &event);
+
+// 3. Attendre des événements (bloquant jusqu'à ce qu'un fd soit prêt)
+struct epoll_event events[MAX_EVENTS];
+int n = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+
+// 4. Traiter les événements prêts
+for (int i = 0; i < n; i++) {
+    if (events[i].events & EPOLLIN) {
+        // Socket prêt pour lecture
+        handleRead(events[i].data.fd);
+    }
+    if (events[i].events & EPOLLOUT) {
+        // Socket prêt pour écriture
+        handleWrite(events[i].data.fd);
+    }
+}
+```
+
+### Architecture : Un seul epoll pour tout
+
+Notre serveur utilise **UN SEUL** `epoll_wait()` qui surveille :
+- Les **listen sockets** (pour accepter de nouvelles connexions)
+- Les **client sockets** en lecture (EPOLLIN)
+- Les **client sockets** en écriture (EPOLLOUT)
+- Les **erreurs** (EPOLLERR, EPOLLHUP)
+
+**Avantage** : Tous les événements sont gérés en même temps, dans la même boucle.
+
+---
+
+##  Architecture du serveur
+
+### Flux principal
+```
+main()
+  └─> Server::init()
+       └─> Créer les listen sockets
+       └─> Enregistrer dans epoll avec callback handleNewConnection
+  └─> Server::start()
+  └─> Server::run()
+       └─> BOUCLE INFINIE:
+            └─> epoll_wait() [BLOQUE ICI]
+            └─> Pour chaque événement prêt:
+                 └─> Appeler le callback approprié
+                      ├─> handleNewConnection (nouveau client)
+                      ├─> handleClientRead (données à lire)
+                      ├─> handleClientWrite (prêt à écrire)
+                      └─> handleClientError (erreur)
+```
+
+### Callbacks pour chaque type d'événement
+
+Nous utilisons des **callbacks** enregistrés dans epoll :
+
+| Type d'événement | Callback | Rôle |
+|-----------------|----------|------|
+| Listen socket + EPOLLIN | `handleNewConnection` | Accepter un nouveau client |
+| Client socket + EPOLLIN | `handleClientRead` | Lire les données du client |
+| Client socket + EPOLLOUT | `handleClientWrite` | Envoyer la réponse au client |
+| Client socket + EPOLLERR | `handleClientError` | Gérer les erreurs |
+
+---
+
+
+### Suppression du client en cas d'erreur
+
+Dès qu'une erreur survient sur un socket, le client est supprimé :
+```cpp
+void Server::removeClient(int client_fd) {
+    std::map<int, Client>::iterator it = _clients.find(client_fd);
+    if (it != _clients.end()) {
+        _epoll_manager.unbindFd(client_fd, -1);  // Retirer de epoll
+        it->second.closeFd();                     // Fermer le socket
+        _clients.erase(it);                       // Supprimer de la map
+        Logger::info("Client disconnected", client_fd);
+    }
+}
+```
+
+### Pas d'I/O en dehors d'epoll
+
+**RÈGLE ABSOLUE** : Tous les `recv()` et `send()` sont déclenchés **UNIQUEMENT** par un événement epoll.
+
+ **INTERDIT** : Lire ou écrire sur un socket sans événement epoll
+ **CORRECT** : Lire/écrire uniquement quand epoll nous dit que c'est prêt
+
+---
+
+## ⚙️ Configuration
+
+Le serveur supporte un fichier de configuration au format NGINX-like :
+```nginx
+server {
+    listen 8080;
+    server_name localhost;
+    
+    # Page d'erreur personnalisée
+    error_page 404 /errors/404.html;
+    
+    # Limite de taille du body (en bytes)
+    client_max_body_size 10485760;  # 10MB
+    
+    location / {
+        root ./static;
+        index index.html;
+        autoindex on;
+        allowed_methods GET POST DELETE;
+    }
+    
+    location /upload {
+        root ./uploads;
+        allowed_methods POST DELETE;
+        client_max_body_size 52428800;  # 50MB pour uploads
+    }
+    
+    location /redirect {
+        return 301 /new-location;
+    }
+    
+    location /cgi-bin {
+        root ./cgi-bin;
+        cgi_enabled on;
+        cgi_extension .py;
+    }
+}
+
+# Deuxième serveur sur un autre port
+server {
+    listen 8081;
+    server_name example.com;
+    root ./site2;
+}
+```
+
+### Tests de configuration
+```bash
+# 1. Plusieurs serveurs avec ports différents
+curl http://localhost:8080/
+curl http://localhost:8081/
+
+# 2. Plusieurs serveurs avec hostnames différents
+curl --resolve example.com:8080:127.0.0.1 http://example.com:8080/
+
+# 3. Page d'erreur personnalisée
+curl http://localhost:8080/page-inexistante  # Affiche errors/404.html
+
+# 4. Limite de taille du body
+curl -X POST -H "Content-Type: text/plain" \
+     --data "SHORT" http://localhost:8080/  # ✅ OK
+curl -X POST -H "Content-Type: text/plain" \
+     --data "$(head -c 20M /dev/urandom)" http://localhost:8080/  # ❌ 413
+
+# 5. Méthodes autorisées
+curl -X DELETE http://localhost:8080/file.txt  # Si autorisé dans config
+curl -X DELETE http://localhost:8080/          # ❌ 405 si non autorisé
+```
+
+---
+
+## Fonctionnalités
+
+### Méthodes HTTP
+
+#### GET - Récupérer une ressource
+```bash
+curl http://localhost:8080/index.html
+curl http://localhost:8080/test.txt
+```
+
+#### POST - Upload de fichier
+```bash
+curl -X POST -F "file=@document.pdf" http://localhost:8080/upload
+```
+
+#### DELETE - Supprimer un fichier
+```bash
+curl -X DELETE http://localhost:8080/uploads/document.pdf
+```
+
+#### Requêtes inconnues (ne crashe pas)
+```bash
+curl -X UNKNOWN http://localhost:8080/  # Retourne 501 Not Implemented
+```
+
+### Fonctionnalités avancées
+
+#### 1. Servir des fichiers statiques
+```bash
+curl http://localhost:8080/styles.css
+curl http://localhost:8080/script.js
+curl http://localhost:8080/image.png
+```
+
+#### 2. Directory listing (autoindex)
+```bash
+curl http://localhost:8080/uploads/
+# Affiche la liste des fichiers si autoindex est activé
+```
+
+#### 3. Redirections
+```bash
+curl -L http://localhost:8080/old-page  # Suit la redirection 301
+```
+
+#### 4. Upload et récupération
+```bash
+# Upload
+curl -X POST -F "file=@test.txt" http://localhost:8080/upload
+
+# Récupération
+curl http://localhost:8080/uploads/test.txt
+```
+
+#### 5. CGI (Python)
+```bash
+curl "http://localhost:8080/cgi-bin/script.py?name=John"
+# Exécute le script Python et retourne le résultat
+```
+
+---
+
+## 🧪 Tests de stress avec Siege
+
+### Installation
+```bash
+brew install siege
+```
+
+### Test basique
+```bash
+siege -b http://localhost:8080/index.html
+```
+
+### Test de stress
+```bash
+# 10 clients concurrents pendant 30 secondes
+siege -b -c 10 -t 30S http://localhost:8080/
+
+# Résultats attendus :
+# - Availability: > 99.5%
+# - Failed transactions: 0
+# - Pas de crash
+```
+
+### Test avec Valgrind
+```bash
+# Terminal 1 : Serveur avec Valgrind
+valgrind --leak-check=full --track-origins=yes ./webserv config.conf
+
+# Terminal 2 : Stress test
+siege -b -c 10 -t 30S http://localhost:8080/
+
+# Terminal 1 : Ctrl+C pour arrêter
+# Vérifier : ERROR SUMMARY: 0 errors
+#            All heap blocks were freed -- no leaks are possible
+```
+
+---
+
+## 📊 Résultats attendus
+
+### Availability > 99.5%
+```json
+{
+    "transactions": 3315,
+    "availability": 100.00,        ← Doit être > 99.5%
+    "elapsed_time": 9.86,
+    "response_time": 0.01,
+    "successful_transactions": 3315,
+    "failed_transactions": 0,      ← Doit être 0
+    "concurrency": 4.99
+}
+```
+
+### Pas de memory leaks
+```
+==12345== HEAP SUMMARY:
+==12345==     in use at exit: 0 bytes in 0 blocks
+==12345==   total heap usage: 439,102 allocs, 439,102 frees
+==12345== 
+==12345== All heap blocks were freed -- no leaks are possible
+==12345== ERROR SUMMARY: 0 errors from 0 contexts
+```
+
+---
+
+## 🔧 Arrêt propre du serveur
+
+Le serveur peut être arrêté de deux manières :
+
+### 1. Ctrl+C (Signal SIGINT/SIGTERM)
+```bash
+./webserv config.conf
+# Ctrl+C
+# [INFO] Received shutdown signal
+# [INFO] Server stopped
+```
+
+### 2. Route /stop (via navigateur)
+```
+http://localhost:8080/
+# Cliquer sur le bouton "Stop Server"
+# Le serveur s'arrête proprement
+```
+
+Les deux méthodes garantissent :
+- ✅ Fermeture propre de tous les sockets
+- ✅ Libération de toute la mémoire
+- ✅ Pas de use-after-free
+- ✅ Pas de hanging connections
+
+---
+
+### ✅ Ce qui est correct dans notre serveur :
+
+1. **Un seul epoll_wait()** dans la boucle principale
+2. **Surveille lecture ET écriture simultanément** (EPOLLIN | EPOLLOUT)
+3. **Un seul recv() / send() par événement**
+4. **Vérification complète des valeurs de retour** (both 0 and -1)
+5. **Pas de vérification d'errno après succès**
+6. **Tous les I/O passent par epoll** (pas de read/write direct)
+7. **Suppression du client en cas d'erreur**
+8. **Pas de memory leaks** (testé avec Valgrind)
+9. **Availability > 99.5%** avec Siege
+10. **Arrêt propre** via signal ou /stop
+
+---
+
+## Auteurs
+
+Projet Webserv - 42 school 
+-Lsadi
+-Rguigneb
+-Reer.aa
+
+---
+
+## 📚 Ressources
+
+- [RFC 2616 - HTTP/1.1](https://www.rfc-editor.org/rfc/rfc2616)
+- [epoll man page](https://man7.org/linux/man-pages/man7/epoll.7.html)
+- [Beej's Guide to Network Programming](https://beej.us/guide/bgnet/)
