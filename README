@@ -49,8 +49,25 @@ uploads/          # Directory for uploaded files
 3. Modify `webserv.conf` to customize the server settings.
 
 ## Testing
-- Use `stress_test.sh` to perform stress testing on the server.
-- Place test files in the `uploads/` directory to simulate file uploads.
+
+### Stress Testing
+Use the `stress_test.sh` script or the `siege` tool to perform stress testing on the server:
+
+- Simulate 10 concurrent users for 1 minute:
+  ```
+  siege -c 10 -t 1M http://localhost:8080/index.html
+  ```
+- Benchmark the server in non-interactive mode:
+  ```
+  siege -b http://localhost:8080/index.html
+  ```
+
+### Memory Leak Testing
+Use `valgrind` to check for memory leaks and track origins of uninitialized values:
+
+```bash
+valgrind --leak-check=full --show-leak-kinds=all --track-fds=yes ./webserv webserv.conf
+```
 
 ## Dependencies
 - Standard C++ libraries.
