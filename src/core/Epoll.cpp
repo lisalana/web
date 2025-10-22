@@ -1,6 +1,5 @@
 #include "Epoll.hpp"
 #include "Utils.hpp"
-#include <cerrno>
 #include <cstring>
 #include <sstream>
 
@@ -41,7 +40,7 @@ EpollManager::EpollManager(int flags) : failed(false)
 	_ep_fd = epoll_create1(flags);
 	if (_ep_fd == -1)
 	{
-		Logger::error("epoll_create1 failed: " + std::string(strerror(errno)));
+		Logger::error("epoll_create1 failed !");
 		failed = true;
 		return ;
 	}
@@ -143,7 +142,7 @@ bool EpollManager::watchForEvents(void *ptr) throw()
 
 	if (ready == -1)
 	{
-		Logger::error("epoll_wait failed: " + std::string(strerror(errno)));
+		Logger::error("epoll_wait failed !");
 		return false;
 	}
 

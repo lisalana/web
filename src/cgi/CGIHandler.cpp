@@ -175,13 +175,16 @@ bool CGIHandler::executeCGI(std::string& output) {
 
         // Essaie de lire
         ssize_t bytesRead = read(pipeOut[0], buffer, sizeof(buffer));
+
+        
+        // remove errno checks and replace them
         if (bytesRead > 0) {
             output.append(buffer, bytesRead);
             Logger::debug("Read " + Utils::intToString(bytesRead) + " bytes from CGI");
         } else if (bytesRead == 0) {
             // EOF - process termine
             break;
-        } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        } else if (bytesRead == -1) {
             // Pas de donnee dispo, attends un peu
             fd_set read_fds;
             FD_ZERO(&read_fds);

@@ -4,7 +4,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <cstring>
-#include <cerrno>
 #include <sys/socket.h>
 
 Client::Client() : _fd(-1) {
@@ -143,9 +142,7 @@ ssize_t Client::readData() {
     } else if (bytes_read == 0) {
         Logger::debug("Client " + Utils::intToString(_fd) + " closed connection");
     } else {
-        if (errno != EAGAIN && errno != EWOULDBLOCK) {
-            Logger::debug("Read error from client " + Utils::intToString(_fd));
-        }
+        Logger::debug("Read error from client " + Utils::intToString(_fd));
     }
     
     return bytes_read;
@@ -166,7 +163,7 @@ ssize_t Client::writeData() {
         updateLastActivity();
         Logger::debug("Wrote " + Utils::intToString(bytes_sent) + " bytes to client " + Utils::intToString(_fd));
     } else if (bytes_sent < 0) {
-        if (errno != EAGAIN && errno != EWOULDBLOCK) {
+        if (bytes_sent == -1) {
             Logger::debug("Write error to client " + Utils::intToString(_fd));
         }
     }

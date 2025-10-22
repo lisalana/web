@@ -6,7 +6,6 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <cerrno>
 #include <csignal>
 #include <cstring>
 #include <algorithm>
@@ -212,9 +211,7 @@ void Server::handleNewConnection(int listen_fd, Server *server) {
     
     int client_fd = accept(listen_fd, (struct sockaddr*)&client_addr, &client_len);
     if (client_fd == -1) {
-        if (errno != EAGAIN && errno != EWOULDBLOCK) {
-            Logger::error("Failed to accept connection");
-        }
+        Logger::error("Failed to accept connection");
         return;
     }
     
@@ -234,9 +231,7 @@ void Server::handleClientRead(int client_fd, Server *server) {
         ssize_t bytes_read = client.readData();
         
         if (bytes_read <= 0) {
-            if (bytes_read == 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
-                server->removeClient(client_fd);
-            }
+            server->removeClient(client_fd);
             break;  // Plus de donnees disponibles pour l'instant
         }
         
@@ -278,7 +273,7 @@ void Server::handleClientWrite(int client_fd, Server *server) {
 
     ssize_t bytes_written = client.writeData();
     
-    if (bytes_written < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+    if (bytes_written < 0) {
         server->removeClient(client_fd);
         return;
     }
@@ -385,7 +380,7 @@ void Server::processRequest(Client& client) {
 }
 
 void Server::generateHttpResponse(Client& client, const HTTPRequest& request) {
-    ServerConfig* serverConfig = _config->getServerByPort(8080);
+    ServerConfig* serverConfig = _config->getServerByPort(request.getPort());
     if (!serverConfig) {
         std::string errorResponse = createHttpResponse(500, "<h1>500 Internal Server Error</h1>");
         client.setWriteBuffer(errorResponse);

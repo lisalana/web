@@ -45,7 +45,8 @@ public:
     std::string& getBodyRef();
     const std::map<std::string, std::string>& getHeaders() const;
     size_t getContentLength() const;
-    
+    int getPort() const;
+
     // Header operations
     std::string getHeader(const std::string& name) const;
     bool hasHeader(const std::string& name) const;

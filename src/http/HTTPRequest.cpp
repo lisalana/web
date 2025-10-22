@@ -1,6 +1,7 @@
 #include "HTTPRequest.hpp"
 #include "Utils.hpp"
 #include <algorithm>
+#include <iostream>
 #include <sstream>
 
 HTTPRequest::HTTPRequest() {
@@ -72,6 +73,16 @@ bool HTTPRequest::isComplete() const {
 
 bool HTTPRequest::isValid() const {
     return _is_valid;
+}
+
+int HTTPRequest::getPort() const {
+    std::string host = getHeader("host");
+
+    size_t colon_pos = host.find(':');
+    if (colon_pos != std::string::npos) {
+        return Utils::stringToInt(host.substr(colon_pos + 1));
+    }
+    return 8080;
 }
 
 bool HTTPRequest::isChunked() const {

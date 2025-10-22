@@ -70,7 +70,7 @@ void ServerConfig::addErrorPage(int errorCode, const std::string& path) {
 const LocationConfig* ServerConfig::findLocation(const std::string& path) const {
     const LocationConfig* bestMatch = NULL;
     size_t bestMatchLength = 0;
-    
+
     for (std::vector<LocationConfig>::const_iterator it = _locations.begin(); 
          it != _locations.end(); ++it) {
         
