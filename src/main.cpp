@@ -6,11 +6,6 @@
 #include "Server.hpp"
 #include "Utils.hpp"
 
-bool isYamlFile(const std::string& filename)
-{
-    return Utils::endsWith(filename, ".yml") || Utils::endsWith(filename, ".yaml");
-}
-
 int main(int argc, char **argv)
 {
     Logger::info("Webserv starting...");
@@ -25,15 +20,9 @@ int main(int argc, char **argv)
     std::string configFile = argv[1];
     Config config;
     
-    if (isYamlFile(configFile)) {
-        Logger::info("Detected YAML configuration format");
-        if (!config.parseYaml(configFile)) {
-            Logger::error("Failed to parse YAML configuration file");
-            return 1;
-        }
-    } else {
+    if (config.parseNginx(configFile)){
         Logger::info("Detected NGINX configuration format");
-        if (!config.parseNginx(configFile)) {
+        if (!config.parseNginx(configFile)){
             Logger::error("Failed to parse NGINX configuration file");
             return 1;
         }
